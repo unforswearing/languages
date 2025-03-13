@@ -1,0 +1,91 @@
+= This is the start of the document
+
+% a comment about something could be placed here
+% or here, it doesn't matter. its up to me!
+
+Now lets begin
+
+---
+
+== Unordered List
+
++ item 1
++ item 2
+++ item 2.1
+++ item 2.2
++++ item 3
+
+
+== Ordered List
+
+# item 1
+# item 2
+## item 2.1
+## item 2.2
+### item 2.2.1
+
+
+== Code / Monospace
+
+``let monospace = "used for code"``
+
+|or|
+
+
+```` 
+let monospace = "used for code"
+print('i love $monospace')
+````
+
+== Text Formatting
+
+*bold*
+|italic|
+_underline_
+~strikeout~
+
+*bold* and |italic| can be *|nested together|*
+all other formatting cannot be nested and must be used individually
+
+== Block Quotes
+
+|Like Markdown|
+
+> here is a block quote
+> very important things
+> can be said here
+
+== Links
+
+::Display Text=https://example.com
+
+Example:
+
+::More information can be found here=https://www.moreinformation.com
+
+Example without display text
+
+::=https://example.com
+
+Omit the preceeding colon to disable automatic url linking
+
+== Images
+
+!!Image Title=images/dog.png
+
+Example without image title
+
+!!=images/dog.png
+
+== Linked Images
+
+!!Image Title=images/dog.png::https://click-dog-to-navigate-here.com
+
+Example without image title
+
+!!=image.jpg::https://viewimage.com
+
+
+
+
+

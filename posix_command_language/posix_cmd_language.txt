@@ -1,0 +1,681 @@
+# `ba`: A limited shell command language 
+
+Inspired by Bash, Zsh, Abs, and Lua
+
+Why `ba`?
+
+- If `sh` is shell, ba is without it
+- `ba` could stand for "Bourne Again"
+- `ba` could stand for "Basic Automation"
+
+Features
+
+The main goal of `ba` language is to reduce the number of obscure bash options and commands that tend to get in the way of scripting and portabilility. `ba` aims to be a mostly "featureless" language that does one thing well: provide the basic functionality to run < 100 line shell scripts for task automation. To that end, tis language does not care about higher-level mathematics or applying programming theory.
+
+- The script is bash functions in the background, use bash anywhere in a `ba` script.
+- This is not intended for interactive use!
+- Reduce Bash to its essential parts 
+	- Deobfuscate operators and expansions by removing them entirely
+	- Replace standard commands with more ergonomic functions
+- Some bash builtins are ignored / disabled
+
+Output: POSIX compatible Bash scripts
+- https://www.gnu.org/software/bash/manual/html_node/Bash-POSIX-Mode.html
+
+---
+
+This document describes `ba.bash`, the core command runner.
+
+1. Language Specification
+2. Preprocessor (`ba run file.ba`)
+3. Language Implementation
+4. Examples
+
+## 1. Language Specification
+
+This only needs to run shell tools (cd, mkdir, etc) and does not need these built in.
+
+`name` is the reference to stored value
+	- for variables and functions
+`expression` evaluates to boolean
+	- expressions never start at the beginning of the line
+	- expressions are only evaluated for variables or 
+	  function return values
+`command` creates effects (files, etc) or return values
+	- commands begin with keywords
+	- commands start at the beginning of the line or 
+	  after the `do` keyword
+	  	- a command may follow the `do` keyword on the same line
+		  or separated by a new line.
+	- commands can include `ba` language builtins or 
+	  bash / shell commands
+	- all `ba` language commands are terminated with 
+	  a new line or the closing `done` keyword.
+	  
+Any value that is not a the name of a function, variable, or command, or is not part of an expression will be treated as invalid and will trigger an error.
+
+### Types
+
+The first iteration of this language will not focus on types, however, they are here for documentation.
+
+- Char
+- String
+- Number
+- List
+- Nil
+
+### Operators
+
+Builtin
+
+- $ to expand a variable
+
+# not sure if i want to use these
+- : to expand a special variable
+- @ to call a function
+
+Math
+
+- Basic math operations, including modulo and power.
+
+- add `+` 
+- subtract `-` 
+- multiply `*` 
+- divide `/`
+- modulo `%`
+- power `^`
+
+- Parenthesis (only valid in math operations)
+
+define expression as 
+	calc (2 * (4 + (144/8)) / 6)
+done
+
+- Comparison operators
+
+- less than `<` 
+- greater than `>` 
+- less or equal `<=` 
+- greater or equal `>=` 
+- strictly equal `==`
+- not equal `!=`
+
+Any operators present outside of a builtin or a math expression will be treated as invalid code, triggering an error.
+
+### Boolean
+
+- true
+- false
+
+Notes:
+
+- An empty string is false.
+- Nil is false.
+- Everything else evaluates to true.
+
+### Keywords
+
+- input
+- print
+- define
+- init
+- nil
+- calc
+- do
+- done
+- from
+- to
+- with
+- cond
+- except
+- fail
+- list
+- match
+- push
+- write
+- state
+
+### Special Variables
+
+TODO: Not sure I want this additional `:` operator. There are only
+	  two uses (currently) and there may be a better way to do this.
+	  Revise.
+	  
+- Special variables are bult into the language and cannot be modified
+- These variables hold value specific to their context
+    - `i:args` is a list of arguments passed to a function
+	- `i:index` is the index of the current item of a given list 
+			 during iteration in a while loop
+- All special variables are optional.
+
+### Variables
+
+- define <name> <command> [args [...]]
+- define <name> do <command> [args [...]] done 
+- $<name>
+
+### Functions
+
+TODO: Not sure I want this additional `@` operator. Revise.
+
+- init <name> do <command> [args [...]] done
+- @<name> [args [...]]
+
+### Builtin Functions
+
+- Considering the possibility of bringing functions over from the zsh stdlib
+	- require
+	- environ
+	- colors
+
+### Conditional
+
+- cond <expression> do
+	<command> [args [...]]
+	[except <expression>] do [command [...]] done
+	[fail] [command [...]]
+  done
+
+### Lists
+
+- list init <number>
+- list range <number> [number]
+- list <name> [item [item] [...]]
+- from <(list) name> <number>
+
+## 2. Preprocessor
+
+All keywords in this language are bash functions. The script should be runnable directly with bash after preprocessing the file.
+
+### A. Preprocess / Compile to Bash
+
+- Convert `ba` language specific features
+	- Expressions
+	- Function definitions
+	- Lists (?)	
+	- Variables (?)
+	- Anything that is not directly executable in bash
+
+- Remove all comments and nil
+
+The keywords are all bash functions, however python may be required to interprept `ba` code to bash. At least for the first iteration of this language, python will assist with the following:
+
+#### Lexing / Tokenizing
+
+Awk is capable of extracting all `init` and `cond` blocks that need tokenization
+
+- `awk '/^(init|cond)/,/^done$/'`
+
+When / after lexing it may be possible to do a 1:1 match on a token against a hash table. 
+
+
+### B. Shellcheck
+
+> **For testing / development only**, however there may be an option for using this feature if there are errors in code generated in the future.
+
+Ealier conversion of non-bash constructions have been removed or translated into bash code during the preprocessing stem. The sourced `ba.bash` script holds the definitions for all language keywords, and other processing code.
+
+The language should test the generated bash code against shellcheck to ensure there are no errors in translation. Start with the following commands:
+
+```
+# requires jq
+
+shellcheck -f json generated.bash \
+	| jq '.[] | "\(.line),\(.column),\(.level),\(.code),\(.message)"'
+	> shellcheck.csv
+```
+
+Using `shfmt` may also be good for analysis
+- https://github.com/mvdan/sh
+
+The `checkbashisms` script may also be useful
+- https://formulae.brew.sh/formula/checkbashisms
+
+Additional testing can be done with Python. Ordered by 
+apparent ease of use and desired features:
+
+- `bashlex`
+	- https://github.com/idank/bashlex
+- `shlex`
+	- https://docs.python.org/3/library/shlex.html
+	- https://pymotw.com/3/shlex/
+- `pyparsing`
+	- https://pypi.org/project/pyparsing/
+
+
+### C. Execution Environment
+
+After testing the generated script, the resulting code should be standard bash v5+ that can run in any environment using that version of the host shell.
+
+The `ba.bash` script will attempt to execute the generated bash code inside an empty environment (todo: this is possible with zsh, but also with bash?)
+
+- Use https://www.gnu.org/software/bash/manual/html_node/Bash-POSIX-Mode.html
+- Disable some bash builtins to prevent their use and enourage `ba` defaults
+	- Disable the following by creating an empty file or function with the cmd name
+		- https://unix.stackexchange.com/questions/496341/why-does-posix-require-certain-shell-built-ins-to-have-an-external-implementatio#comment912842_496341
+		- https://pubs.opengroup.org/onlinepubs/9699919799.2018edition/xrat/V4_xcu_chap02.html#tag_23_02_09_02
+	- function if then fi case esac 
+	- if possible: [[ ]] { }
+
+Notes:
+
+- On the backend, avoid using bash arrays for comaptibility with older 
+  bash versions.To store data during runtime, use colon delimited text:
+
+readonly ba_builtins="input:ba_func_input
+	print:ba_func_print
+	define:ba_func_define
+	as:ba_func_as
+	init:ba_func_init
+	nil:ba_func_nil
+	do:ba_func_do
+	done:ba_func_done
+	from:ba_func_from
+	to:ba_func_to
+	with:ba_func_with
+	cond:ba_func_cond
+	except:ba_func_except
+	fail:ba_func_fail
+	list:ba_func_list
+	write:ba_func_write
+	state:ba_func_state"
+
+## 3. Language Implementation
+
+TODO: This will mostly happen in another file.
+
+### Functions pulled from other Zsh and Bash scripts
+
+All code needs to be tested.
+
+```
+color() {
+  declare -A allcolors
+
+  allcolors[red]="\033[31m"
+  allcolors[green]="\033[32m"
+  allcolors[yellow]="\033[33m"
+  allcolors[blue]="\033[34m"
+  allcolors[reset]="\033[39m"
+  allcolors[black]="\033[30m"
+  allcolors[white]="\033[37m"
+  allcolors[magenta]="\033[35m"
+  allcolors[cyan]="\033[36m"
+
+  libutil:argtest "$1"
+  local opt="$1"
+  shift
+  case "$opt" in
+    (red|green|yellow|blue|black|white|magenta|cyan) 
+	  print "${allcolors[$opt]}$@${reset}" 
+	;;
+	(help|*) 
+	  print "color <red|green|yellow|blue|black|magenta|cyan> string" 
+	;;
+  esac
+}
+# ---
+libutil:argtest() {
+  # usage libutil:argtest num
+  # libutil:argtest 2 => if $1 or $2 is not present, print message
+  local caller="$1"
+  shift
+  if [[ -z "$1" ]]; then
+    color red "[ERROR] $caller: argument missing"
+    return 1
+  fi
+}
+libutil:timestamp() { "$(date +'%Y-%m-%d %H:%M:%S')"; }
+libutil:log() {
+  local message="$*"
+  color green "$(timestamp) [LOG] $message"
+}
+libutil:error() {
+  local message="$*"
+  # Print the error message to stderr with a timestamp
+  color red "[ERROR] $message"
+}
+libutil:error.option() {
+  libutil:argtest "$1"
+  libutil:argtest "$2"
+  local caller="$1"
+  local fopt="$2"
+  color red "[ERROR] $caller: no method named '$fopt'" && return 1
+}
+libutil:error.notfound() {
+  libutil:argtest "$1"
+  libutil:argtest "$2"
+  local caller=$1
+  local fopt="$2"
+  color red "[ERROR] $caller: '$fopt' not found" && return 1
+}
+# ---
+require() {
+  libutil:argtest "$1"
+	local comm
+	comm="$(command -v "$1")"
+	if [[ -n $comm ]]
+	then
+		true
+	else
+		libutil:error.notfound "require" "$comm"
+	fi
+}
+# environ "EDITOR"
+environ () {
+	local varname
+	varname="$1"
+	if [[ -v "$varname" ]] && [[ -n "$varname" ]]
+	then
+		true
+	else
+		libutil:error "$0: variable '$1' is not set or is not in environment" && return 1
+	fi
+}
+```
+
+A list of existing functions to use 
+
+- from 
+https://github.com/unforswearing/zsh-config/blob/main/archive/stdlib.zsh
+	- input
+	- safequote
+
+- from https://github.com/unforswearing/bash_dsl/blob/master/bash_dsl.bash
+	- all init / exit functions
+	- typeof
+	- decr
+	- incr
+
+## 4. Examples
+
+A simple example with `ba` and `bash` code
+
+```bash
+source ba.bash
+
+define destination "Downloads/images"
+mkdir $destination
+print "created $destination"
+
+define iterator as list 4 done
+with $iterator do
+	define idx :index
+	touch "$destination/file$idx"
+done
+```
+
+Language overview 
+
+```bash
+# like bash (and tcl and others) everything is a string.
+# every command and expression is a list, which is itself just
+# a space delimited string of strings.
+
+# use the hash at the start of the line for comments
+# there are no multiline comments
+
+# no bare expressions. the following are invalid:
+1 + 1 
+4
+"Hello this is a string"
+
+# Variables
+
+# variables declared with `define`
+
+define name "Robert"
+define number 12
+
+# Setting a variable to the result of an expression
+#
+# if there is more than one argument following <name>, consider it a list
+# of expressions to evaluate and set the result to <name>. the new line at
+# the end of the list closes the expression. This means that variables cannot 
+# be defined across multiple lines
+
+define answer calc 4 * 3
+define total calc $answer * 2
+
+# notice that mathematical expressions must be evaluated
+# using the `calc` command.
+
+define value calc 1 - 5
+
+# even though everthing is a string, types are tracked internally to avoid
+# errors in generated code. types: char, string, number, list, nil.
+# the type of a variable can be retrieved using the intentionally
+# long and difficult to type `classification` command
+
+define length 550
+
+# result: number
+
+classification $length
+
+# Functions
+
+# Functions use `as .. done` blocks to indicate 
+# that the <name> is a reference to the group of expressions 
+# to be evaluated in the `as .. done` block.
+# the declaration indicates that the name `calculate` will be used
+# at some point later in the script to execute the listed expressions.
+
+# functions must use the `init` keyword
+# function body must be preceeded with the `as` keyword
+
+init add as
+	calc $1 + $2
+done
+
+# Note: The following is invalid code ---------
+
+# functions cannot be delcared without a body
+# the following code will throw an error
+
+init sub
+sub as
+	calc $1 - $2 
+done
+
+# ---------------------------------------------
+
+# functions have a builtin variable called :args
+# this allows access to the list of arguments passed to the function
+
+init countargs as
+	define count 0
+	with number from :args do
+		# :index is a special variable built into loops
+	    define argnum clac :index + 1
+		print "adding argument $argnum"
+		define count calc $count + $number
+	done
+	
+	print "this function has $count arguments"
+done
+
+# functions must be executed with the @ operator
+# TODO I want to remove this `@` operator
+
+define result1 @add 3 3
+define result2 @sub $result1 4 
+
+print $result2
+
+# nil is a special keyword
+
+# expressions must be defined or discarded
+# no bare expressions are allowed in the code.
+# use nil to discard a value, as when sending
+# to /dev/null in a traditional shell language
+
+nil calc 1 * 1
+
+# note: `nil` can use `do` or `as` depending on context.
+# `discard` acts as a name to describe the block
+
+nil discard do
+  define total  calc 4 * (12.50 + 2) done
+done
+
+# nil can also be used for comments
+
+nil : this line will not be printed or executed
+
+# use nil as a value for a variable
+
+define empty nil
+
+# or use nil to unambiguously end execution of a do / done block
+
+init test as
+	cond $1 == "emergency" do
+		print "call the landlord"
+		nil
+	done
+done
+
+# use cond, except, and fail for conditional comparisons and flow
+# compound conditionals must be broken into parts before using with cond
+# cond is an alias for `test` with {features}
+
+define upperlimit 10
+define median 5
+define belowmedian $result < 5
+
+cond $result < $upperlimit do
+	# only executes if the expression above is true
+	print "result is less than 10"
+	
+	# `except` works like elif / else if
+	# `except` evaluates a conditional and only executes 
+	# if the conditional is true
+	except $belowmedian do 
+		print "result is less than 5"
+	done
+	
+	# fail executes when the expression above is false
+	fail print "result is greater than 10"
+done
+
+cond 7 == 7 do
+  print "yes, 7 equals 7"
+
+  except 7 == 8 do
+    print "uh oh, that doesn't make sense"
+  done
+
+  fail "something went very wrong here..."
+done
+
+# Loops use `do...done` blocks, similar to the function `do...as`.
+# In loops `do` only means: execute the following commands
+# without regard to assignment or outputing the result of execution.
+# Code within the `do .. done` block is executed immeditately, in contrast with `as..done`
+
+# loops TBD
+
+
+# Lists
+
+# Since all commands and expressions are lists, the idea behind the list keyword is simply to ensure that lists of strings should not be interpreted as a command or expression. The parser already 1) only considers keywords valid, thus will not attempt to execute a string that does not match a keyword, and 2) throws errors for "bare expressions". The list keyword exists to allow the parser to skip these checks and consider the entire list itself just a string.
+
+# define a list as a string of strings (numbers are strings)
+# use single quotes to allow spaces
+# 'Facebook and Instgram' can be considered a nested list
+
+define items list "4 1 3 'fox' 'Facebook and Instagram'"
+
+# lists are not indexed by default
+# get an item from the list using `match`
+
+define animal match "fox" from $items
+
+# add items to the end of a list using `push`
+define nestedlist list "14 The Grand Canyon"
+
+push $nestedlist to $items
+
+# ----------------------------------------
+
+# write to create and append files
+
+# there is no builtin way to delete files
+# the `to` command checks that the argument is a path, error if no file at path
+
+write "this is some content" to "/path/to/file.txt"
+
+# input to read a file at the provided path, error if no file at path
+
+define contents input "/path/to/file.txt"
+
+# input without an argument will wait for the user to enter text
+
+init getage as
+  print "enter your age"
+  input
+done
+
+# Inspired by the `init` and `exit` functions from BashDSL, use these
+# to modify the script execution state. All `ba` scripts will have default
+# options set for its execution environment: noclobber, nounset, noglob,
+# errexit, others tbd. Note: some options are only valid with interactive use.
+
+# A command to set bash shell options for a `ba` script
+
+state set strict verbose
+
+# Unset shell options for the current script
+
+state unset noexec
+
+# Unset the state created above and restore the default options
+
+state reset
+```
+
+---
+
+### Future features
+
+```bash
+# A feature for later: Task Automation
+#
+# Regarding task automation, it might be useful to have scheduling commands
+# to orchestrate scripts on a schedule. Would need a dsl for creating
+# and evaluating basic cron expressions.
+init cleardownloads do
+  cd Downloads
+  define filecount as ls -la | wc -l done
+  define filenames as ls done
+  define report "$filecount files removed from Downloads.\nFiles:\n$filenames"
+
+  write $report to "/log/automation/downloads.txt"
+
+  rm Downloads/*
+done
+
+# schedule will compile the function to bash and create a
+# standalone script for use with cron, stored in the `ba` data directory.
+# run the `cleardownloads` function on the first day of every quarter
+schedule "0 0 1 */2 * *" cleardownloads
+
+# maybe also create a `watch` command that will use specific and limited
+# paramenters to watch for and execute code when that parameter returns true.
+# newfile, rmfile, newdir, rmdir, filemod
+define newfilecount 0
+watch newfile "Downloads" do
+  # this block will run for every new file added to the Downloads folder
+  print "a new file was added to the Downloads folder"
+  # track the number of files added to the folder
+  define newfilecount as $newfilecount + 1 done
+  # if the watch command sees five new files added,
+  # cancel `watch` by using the `ignore` command.
+  cond $newfilecount >= 5 do
+    ignore newfile
+    print "Met or exceeded maximum new file limit"
+    nil
+  done
+done
+```bash
